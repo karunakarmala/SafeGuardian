@@ -590,17 +590,37 @@ export default function App() {
 
           const result = await response.json();
           const address = result.address || {};
-          const area =
-            address.suburb || address.neighbourhood || address.residential ||
-            address.quarter || address.hamlet;
-          const city =
-            address.city || address.town || address.village ||
-            address.municipality || address.county;
-          const parts = [area, city, address.state, address.country].filter(Boolean);
+
+          // Build the most detailed address OpenStreetMap actually provides.
+          // Some rural locations have no mapped street/locality, so keep the
+          // available village/mandal/district/state hierarchy as a fallback.
+          const road = [address.house_number, address.road || address.pedestrian || address.footway]
+            .filter(Boolean)
+            .join(" ");
+
+          const candidates = [
+            road,
+            address.neighbourhood,
+            address.suburb || address.residential || address.quarter,
+            address.village || address.hamlet || address.locality,
+            address.town || address.city || address.municipality,
+            address.county,
+            address.state_district,
+            address.state,
+            address.postcode,
+            address.country
+          ].filter(Boolean);
+
+          // Remove repeated labels (common in OSM administrative boundaries).
+          const parts = candidates.filter((part, index) =>
+            candidates.findIndex((value) =>
+              value.toLocaleLowerCase() === String(part).toLocaleLowerCase()
+            ) === index
+          );
 
           updates[item.owner_id] = parts.length
-            ? [...new Set(parts)].join(", ")
-            : result.display_name || "Place name unavailable";
+            ? parts.join(", ")
+            : result.display_name || "Place name unavailable — use Open map";
         } catch (err) {
           if (err.name === "AbortError") return;
           console.error("Location lookup error:", err);
